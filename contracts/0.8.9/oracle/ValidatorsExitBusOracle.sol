@@ -155,6 +155,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         /// contains a block, the state being reported should include all state
         /// changes resulting from that block. The epoch containing the slot
         /// should be finalized prior to calculating the report.
+        // 上报参看的beacon的slot
         uint256 refSlot;
 
         ///
@@ -166,14 +167,20 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         ///
         /// Cannot be zero: in the case there's no validator exit requests to submit, oracles
         /// should skip submitting the report for the current reporting frame.
+        /**
+         * 本报告中验证器退出请求的总数。一定不能更大检查OracleReportSanityChecker.checkExitBusOracleReport。
+           不能为零:在没有要提交的验证器退出请求的情况下，oracle应跳过提交当前报告框架的报告。
+         */
         uint256 requestsCount;
 
         /// @dev Format of the validator exit requests data. Currently, only the
         /// DATA_FORMAT_LIST=1 is supported.
+        // 参看：定义的数据格式类型
         uint256 dataFormat;
 
         /// @dev Validator exit requests data. Can differ based on the data format,
         /// see the constant defining a specific data format below for more info.
+        // 参看数据格式常量 DATA_FORMAT_LIST
         bytes data;
     }
 
@@ -192,10 +199,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     ///
     /// Requests must be sorted in the ascending order by the following compound
     /// key: (moduleId, nodeOpId, validatorIndex).
-    ///
+    /// 以数组形式包装交易 上传每个需要退出验证者的信息
     uint256 public constant DATA_FORMAT_LIST = 1;
 
     /// Length in bytes of packed request
+    // 每个validator数据的字节长度
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
 
     /// @notice Submits report data for processing.
@@ -213,7 +221,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     /// - The keccak256 hash of the ABI-encoded data is different from the last hash
     ///   provided by the hash consensus contract.
     /// - The provided data doesn't meet safety checks.
-    ///
+    ///  与 AccountingOracle 检查逻辑类似
     function submitReportData(ReportData calldata data, uint256 contractVersion)
         external whenResumed
     {
@@ -335,17 +343,21 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
             revert UnsupportedRequestsDataFormat(data.dataFormat);
         }
 
+        // 数据格式异常，每个validator信息长度为 64 字节
         if (data.data.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
         }
 
+        // 退出请求的数量应用完整性检查
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
 
+        // 退出数量不一致 报错
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
+        // 退出请求列表处理
         _processExitRequestsList(data.data);
 
         _storageDataProcessingState().value = DataProcessingState({
@@ -359,6 +371,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
             return;
         }
 
+        // 更新总退出的数量
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
             TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.requestsCount
         );
@@ -383,6 +396,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
         uint256 timestamp = _getTime();
 
+        // 提取 data 中的数据
         while (offset < offsetPastEnd) {
             uint256 dataWithoutPubkey;
             assembly {

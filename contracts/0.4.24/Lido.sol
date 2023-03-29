@@ -838,6 +838,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
 
         // withdraw withdrawals and put them to the buffer
+        // 将共识层vault余额提走
         if (_withdrawalsToWithdraw > 0) {
             IWithdrawalVault(_contracts.withdrawalVault).withdrawWithdrawals(_withdrawalsToWithdraw);
         }
@@ -893,14 +894,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _withdrawnWithdrawals,
         uint256 _withdrawnElRewards
     ) internal returns (uint256 sharesMintedAsFees) {
+        // 当前共识层总余额 = 上报的共识层余额 + 共识层提款的余额
         uint256 postCLTotalBalance = _postCLBalance.add(_withdrawnWithdrawals);
         // Don’t mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
         if (postCLTotalBalance > _reportContext.preCLBalance) {
+            // 共识层奖励 = 当前共识层的余额 - 上一次共识层余额
             uint256 consensusLayerRewards = postCLTotalBalance - _reportContext.preCLBalance;
 
+            // 奖励铸造份额（协议收取一定比例）
             sharesMintedAsFees = _distributeFee(
                 _reportContext.preTotalPooledEther,
                 _reportContext.preTotalShares,
@@ -986,9 +990,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @dev Distributes fee portion of the rewards by minting and distributing corresponding amount of liquid tokens.
-     * @param _preTotalPooledEther Total supply before report-induced changes applied
-     * @param _preTotalShares Total shares before report-induced changes applied
-     * @param _totalRewards Total rewards accrued both on the Execution Layer and the Consensus Layer sides in wei.
+     通过铸造和分发相应数量的流动代币来分配奖励的费用部分。
+     * @param _preTotalPooledEther Total supply before report-induced changes applied 应用报告引起的更改之前的总供应量
+     * @param _preTotalShares Total shares before report-induced changes applied 应用报告引起的更改之前的总份额
+     * @param _totalRewards Total rewards accrued both on the Execution Layer and the Consensus Layer sides in wei. 执行层和共识层累积的总奖励。
      */
     function _distributeFee(
         uint256 _preTotalPooledEther,
@@ -1179,6 +1184,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * 7. Distribute protocol fee (treasury & node operators)
      * 8. Complete token rebase by informing observers (emit an event and call the external receivers if any)
      * 9. Sanity check for the provided simulated share rate
+     *
+     * @return postRebaseAmounts[0]: `postTotalPooledEther` amount of ether in the protocol after report
+     * @return postRebaseAmounts[1]: `postTotalShares` amount of shares in the protocol after report
+     * @return postRebaseAmounts[2]: `withdrawals` withdrawn from the withdrawals vault
+     * @return postRebaseAmounts[3]: `elRewards` withdrawn from the execution layer rewards vault
      */
     function _handleOracleReport(OracleReportedData memory _reportedData) internal returns (uint256[4]) {
         OracleReportContracts memory contracts = _loadOracleReportContracts();
@@ -1189,8 +1199,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         OracleReportContext memory reportContext;
 
         // Step 1.
-        // Take a snapshot of the current (pre-) state
+        // Take a snapshot of the current (pre-) state  即共识层数据变更处理
+        // 获取系统控制的Ether总量
         reportContext.preTotalPooledEther = _getTotalPooledEther();
+        // 现有股份的总数
         reportContext.preTotalShares = _getTotalShares();
         reportContext.preCLValidators = CL_VALIDATORS_POSITION.getStorageUint256();
         reportContext.preCLBalance = _processClStateUpdate(
@@ -1200,19 +1212,23 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _reportedData.postCLBalance
         );
 
-        // Step 2.
+        // Step 2.  即check上报数据
         // Pass the report data to sanity checker (reverts if malformed)
         _checkAccountingOracleReport(contracts, _reportedData, reportContext);
 
         // Step 3.
         // Pre-calculate the ether to lock for withdrawal queue and shares to be burnt
         // due to withdrawal requests to finalize
+        // 预先计算以太币以锁定提现队列和要烧掉的股份，由于提款请求尚未敲定
         if (_reportedData.withdrawalFinalizationBatches.length != 0) {
             (
+                // 被锁定的eth
                 reportContext.etherToLockOnWithdrawalQueue,
+                // 被燃烧的份额
                 reportContext.sharesToBurnFromWithdrawalQueue
             ) = _calculateWithdrawals(contracts, _reportedData);
 
+            // 处理燃烧的份额
             if (reportContext.sharesToBurnFromWithdrawalQueue > 0) {
                 IBurner(contracts.burner).requestBurnShares(
                     contracts.withdrawalQueue,
@@ -1223,7 +1239,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         // Step 4.
         // Pass the accounting values to sanity checker to smoothen positive token rebase
+        // rebase操作  （延迟额外奖励在下一轮应用？）
 
+        // IOracleReportSanityChecker 的实现在 contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol
+        // todo rebase 需要更加详细的分析
         uint256 withdrawals;
         uint256 elRewards;
         (
@@ -1242,6 +1261,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         // Step 5.
         // Invoke finalization of the withdrawal requests (send ether to withdrawal queue, assign shares to be burnt)
+        // 调用提现请求的终结(将以太币发送到提现队列，分配要烧掉的份额)
+        // collect ETH from ELRewardsVault and WithdrawalVault, then send to WithdrawalQueue
         _collectRewardsAndProcessWithdrawals(
             contracts,
             withdrawals,
@@ -1262,6 +1283,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         // Step 6.
         // Burn the previously requested shares
+        // 销毁先前请求的股份
         if (reportContext.sharesToBurn > 0) {
             IBurner(contracts.burner).commitSharesToBurn(reportContext.sharesToBurn);
             _burnShares(contracts.burner, reportContext.sharesToBurn);
@@ -1269,6 +1291,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         // Step 7.
         // Distribute protocol fee (treasury & node operators)
+        // 分发费用
         reportContext.sharesMintedAsFees = _processRewards(
             reportContext,
             _reportedData.postCLBalance,
@@ -1278,6 +1301,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         // Step 8.
         // Complete token rebase by informing observers (emit an event and call the external receivers if any)
+        // 通过通知观察者完成令牌重置(触发事件并调用外部接收器(如果有))
         (
             uint256 postTotalShares,
             uint256 postTotalPooledEther
@@ -1288,6 +1312,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         );
 
         // Step 9. Sanity check for the provided simulated share rate
+        // 所提供的模拟共享率的完整性检查
         if (_reportedData.withdrawalFinalizationBatches.length != 0) {
             IOracleReportSanityChecker(contracts.oracleReportSanityChecker).checkSimulatedShareRate(
                 postTotalPooledEther,
@@ -1335,6 +1360,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         postTotalPooledEther = _getTotalPooledEther();
 
         if (_postTokenRebaseReceiver != address(0)) {
+            // 实现在 contracts/0.4.24/oracle/LegacyOracle.sol
             _postTokenRebaseReceiver.handlePostTokenRebase(
                 _reportedData.reportTimestamp,
                 _reportedData.timeElapsed,

@@ -330,6 +330,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
     ///     rewards vault during Lido's oracle report processing
+    ///
     /// @param _preTotalPooledEther total amount of ETH controlled by the protocol
     /// @param _preTotalShares total amount of minted stETH shares
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
@@ -345,21 +346,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return elRewards ETH amount allowed to be taken from the EL rewards vault
     /// @return simulatedSharesToBurn simulated amount to be burnt (if no ether locked on withdrawals)
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
+    /// 返回可能从提款库和EL中提取的允许的ETH数量 在丽都的甲骨文报告处理期间奖励金库
+    // todo rebase 需要更加详细的分析
     function smoothenTokenRebase(
-        uint256 _preTotalPooledEther,
-        uint256 _preTotalShares,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
-        uint256 _withdrawalVaultBalance,
+        uint256 _preTotalPooledEther, // 协议控制的ETH总数
+        uint256 _preTotalShares, // 发行stETH股份总额
+        uint256 _preCLBalance, // 之前，所有Lido验证器在共识层上的余额之和当前oracle报告
+        uint256 _postCLBalance, // 之后，所有Lido验证器在共识层上的余额之和当前oracle报告
+        uint256 _withdrawalVaultBalance, // 在执行层提取金库余额以进行报表计算
         uint256 _elRewardsVaultBalance,
-        uint256 _sharesRequestedToBurn,
-        uint256 _etherToLockForWithdrawals,
-        uint256 _newSharesToBurnForWithdrawals
+        uint256 _sharesRequestedToBurn, // 请求燃烧的份额
+        uint256 _etherToLockForWithdrawals, // 为了提款而锁定的eth
+        uint256 _newSharesToBurnForWithdrawals // 新的因最终提款处理成功被销毁的份额
     ) external view returns (
-        uint256 withdrawals,
-        uint256 elRewards,
-        uint256 simulatedSharesToBurn,
-        uint256 sharesToBurn
+        uint256 withdrawals, // 允许从提款金库提取的ETH数量
+        uint256 elRewards, // 允许从EL奖励库中取出的ETH数量
+        uint256 simulatedSharesToBurn, // 模拟烧掉的金额(如果取款时没有锁定以太币)
+        uint256 sharesToBurn // 计提金额(用于提款结算)
     ) {
         TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
             getMaxPositiveTokenRebase(),
@@ -381,6 +384,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // it's used to check later the provided `simulatedShareRate` value
         // after the off-chain calculation via `eth_call` of `Lido.handleOracleReport()`
         // see also step 9 of the `Lido._handleOracleReport()`
+        /*
+           决定股票的燃烧限度，如果报告期间没有完成提款，它用于稍后检查提供的' simulatedShareRate '值
+           在通过' Lido.handleOracleReport() '的' eth_call '进行链下计算后
+           另请参阅' Lido._handleOracleReport() '的步骤9
+        */
         simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
 
         // remove ether to lock for withdrawals from total pooled ether

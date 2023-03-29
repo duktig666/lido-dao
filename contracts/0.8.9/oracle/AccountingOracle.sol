@@ -383,9 +383,19 @@ contract AccountingOracle is BaseOracle {
     ///   provided by the hash consensus contract.
     /// - The provided data doesn't meet safety checks.
     ///
+    /**
+     * 呼叫者不是oracle委员会的成员，不拥有SUBMIT_DATA_ROLE
+       提供的合同版本与当前版本不一致
+       提供的共识版本与预期的版本不同。
+       错过当前共识框架的处理截止日期
+       abi编码数据的keccak256哈希与最后一个哈希不同由哈希共识契约提供。
+       提供的数据不符合安全检查。
+     */
     function submitReportData(ReportData calldata data, uint256 contractVersion) external {
+        // 判断oracle调用方是否有权限
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
+        // 检查这些共识层数据是否匹配
         _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data)));
         uint256 prevRefSlot = _startProcessing();
         _handleConsensusReportData(data, prevRefSlot);
@@ -583,9 +593,12 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
+        // 检查额外数据项是否超过 最大值65535
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkAccountingExtraDataListItemsCount(data.extraDataItemsCount);
 
+        // 实现在 contracts/0.4.24/oracle/LegacyOracle.sol
+        // 计算并存储 调用的epochId
         ILegacyOracle(LEGACY_ORACLE).handleConsensusLayerReport(
             data.refSlot,
             data.clBalanceGwei * 1e9,
@@ -601,15 +614,18 @@ contract AccountingOracle is BaseOracle {
             stakingRouter,
             data.stakingModuleIdsWithNewlyExitedValidators,
             data.numExitedValidatorsByStakingModule,
-            slotsElapsed
+            slotsElapsed // 两次上报的slot间隔
         );
 
+        // 实现在：contracts/0.8.9/WithdrawalQueue.sol
+        // 更新 bunker 模式状态和上次报告时间戳
         withdrawalQueue.onOracleReport(
             data.isBunkerMode,
             GENESIS_TIME + prevRefSlot * SECONDS_PER_SLOT,
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT
         );
 
+        // !!! 真正处理上报的核心逻辑
         ILido(LIDO).handleOracleReport(
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
             slotsElapsed * SECONDS_PER_SLOT,
@@ -622,6 +638,8 @@ contract AccountingOracle is BaseOracle {
             data.simulatedShareRate
         );
 
+        // 处理上报的额外数据
+        // todo 需要其他地方分析用法
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({
             refSlot: data.refSlot.toUint64(),
             dataFormat: data.extraDataFormat.toUint16(),
@@ -661,6 +679,8 @@ contract AccountingOracle is BaseOracle {
             unchecked { ++i; }
         }
 
+        // 实现在：contracts/0.8.9/StakingRouter.sol
+        // 更新已退出的验证器的总数
         uint256 newlyExitedValidatorsCount = stakingRouter.updateExitedValidatorsCountByStakingModule(
             stakingModuleIds,
             numExitedValidatorsByStakingModule
@@ -670,6 +690,7 @@ contract AccountingOracle is BaseOracle {
             newlyExitedValidatorsCount * (1 days) /
             (SECONDS_PER_SLOT * slotsElapsed);
 
+        // 每天检查退出验证器的比率
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitedValidatorsRatePerDay(exitedValidatorsRatePerDay);
     }

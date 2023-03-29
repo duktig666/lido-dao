@@ -131,6 +131,7 @@ library PositiveTokenRebaseLimiter {
 
     /**
      * @dev increase total pooled ether up to the limit and return the consumed value (not exceeding the limit)
+     将总池ether增加到限制并返回消耗的值(不超过限制)
      * @param _limiterState limit repr struct
      * @param _etherAmount desired ether addition
      * @return consumedEther appended ether still not exceeding the limit

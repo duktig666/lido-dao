@@ -243,6 +243,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     function _checkConsensusData(uint256 refSlot, uint256 consensusVersion, bytes32 hash)
         internal view
     {
+        // 如果错过当前共识报告的处理截止日期，报错
         _checkProcessingDeadline();
 
         ConsensusReport memory report = _storageConsensusReport().value;
@@ -273,6 +274,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
 
         ConsensusReport memory report = _storageConsensusReport().value;
 
+        // 如果是已经report的slot 报错
         uint256 prevProcessingRefSlot = LAST_PROCESSING_REF_SLOT_POSITION.getStorageUint256();
         if (prevProcessingRefSlot == report.refSlot) {
             revert RefSlotAlreadyProcessing();

@@ -354,6 +354,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///    `StakingRouter.onValidatorsCountsByNodeOperatorReportingFinished` which, in turn, calls
     ///    `IStakingModule.onExitedAndStuckValidatorsCountsUpdated` on all modules.
     ///
+    // todo 需要再次研究
     function updateExitedValidatorsCountByStakingModule(
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _exitedValidatorsCounts
