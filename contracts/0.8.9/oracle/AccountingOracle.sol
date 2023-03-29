@@ -197,6 +197,7 @@ contract AccountingOracle is BaseOracle {
         /// contains a block, the state being reported should include all state
         /// changes resulting from that block. The epoch containing the slot
         /// should be finalized prior to calculating the report.
+        // 上报数据基于的slot
         uint256 refSlot;
 
         ///
@@ -205,20 +206,25 @@ contract AccountingOracle is BaseOracle {
 
         /// @dev The number of validators on consensus layer that were ever deposited
         /// via Lido as observed at the reference slot.
+        // 共识层validator数量
         uint256 numValidators;
 
         /// @dev Cumulative balance of all Lido validators on the consensus layer
         /// as observed at the reference slot.
+        // 共识层余额
         uint256 clBalanceGwei;
 
         /// @dev Ids of staking modules that have more exited validators than the number
         /// stored in the respective staking module contract as observed at the reference
         /// slot.
+        // todo 待确认 ModuleId的含义
+        // ModuleId 对应已退出validator的数量
         uint256[] stakingModuleIdsWithNewlyExitedValidators;
 
         /// @dev Number of ever exited validators for each of the staking modules from
         /// the stakingModuleIdsWithNewlyExitedValidators array as observed at the
         /// reference slot.
+        // todo 待确认  moduleId 曾经退出validator的数量
         uint256[] numExitedValidatorsByStakingModule;
 
         ///
@@ -226,16 +232,19 @@ contract AccountingOracle is BaseOracle {
         ///
 
         /// @dev The ETH balance of the Lido withdrawal vault as observed at the reference slot.
+        // 共识层 vault的余额
         uint256 withdrawalVaultBalance;
 
         /// @dev The ETH balance of the Lido execution layer rewards vault as observed
         /// at the reference slot.
+        // 执行层 vault的余额
         uint256 elRewardsVaultBalance;
 
         /// @dev The shares amount requested to burn through Burner as observed
         /// at the reference slot. The value can be obtained in the following way:
         /// `(coverSharesToBurn, nonCoverSharesToBurn) = IBurner(burner).getSharesRequestedToBurn()
         /// sharesRequestedToBurn = coverSharesToBurn + nonCoverSharesToBurn`
+        // 请求销毁的份额 steth
         uint256 sharesRequestedToBurn;
 
         ///
@@ -245,16 +254,19 @@ contract AccountingOracle is BaseOracle {
         /// @dev The ascendingly-sorted array of withdrawal request IDs obtained by calling
         /// WithdrawalQueue.calculateFinalizationBatches. Empty array means that no withdrawal
         /// requests should be finalized.
+        // todo   作用？    提现请求  通过调用获得的提现请求id的递增排序数组
         uint256[] withdrawalFinalizationBatches;
 
         /// @dev The share/ETH rate with the 10^27 precision (i.e. the price of one stETH share
         /// in ETH where one ETH is denominated as 10^27) that would be effective as the result of
         /// applying this oracle report at the reference slot, with withdrawalFinalizationBatches
         /// set to empty array and simulatedShareRate set to 0.
+        // todo
         uint256 simulatedShareRate;
 
         /// @dev Whether, based on the state observed at the reference slot, the protocol should
         /// be in the bunker mode.
+        // 是否是 bunker 模式
         bool isBunkerMode;
 
         ///
@@ -277,7 +289,7 @@ contract AccountingOracle is BaseOracle {
         /// Items should be sorted ascendingly by the (itemType, ...itemSortingKey) compound key
         /// where `itemSortingKey` calculation depends on the item's type (see below).
         ///
-        /// ----------------------------------------------------------------------------------------
+        /// -------------------------------itemType=0  todo stuck validators ？？？ ---------------------------------------------------------
         ///
         /// itemType=0 (EXTRA_DATA_TYPE_STUCK_VALIDATORS): stuck validators by node operators.
         /// itemPayload format:
@@ -310,7 +322,7 @@ contract AccountingOracle is BaseOracle {
         ///
         /// itemSortingKey = (moduleId, nodeOperatorIds[0:8])
         ///
-        /// ----------------------------------------------------------------------------------------
+        /// --------------------------itemType=1   退出的验证者--------------------------------------------------------------
         ///
         /// itemType=1 (EXTRA_DATA_TYPE_EXITED_VALIDATORS): exited validators by node operators.
         ///
@@ -332,14 +344,14 @@ contract AccountingOracle is BaseOracle {
         /// Currently, only the EXTRA_DATA_FORMAT_EMPTY=0 and EXTRA_DATA_FORMAT_LIST=1
         /// formats are supported. See the constant defining a specific data format for
         /// more info.
-        ///
+        /// 额外数据的格式
         uint256 extraDataFormat;
 
         /// @dev Hash of the extra data. See the constant defining a specific extra data
         /// format for the info on how to calculate the hash.
         ///
         /// Must be set to a zero hash if the oracle report contains no extra data.
-        ///
+        /// 不报告数据设置为 0 值的散列
         bytes32 extraDataHash;
 
         /// @dev Number of the extra data items.
