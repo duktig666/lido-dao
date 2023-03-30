@@ -137,6 +137,7 @@ abstract contract WithdrawalQueueBase {
     }
 
     /// @notice Returns the amount of stETH in the queue yet to be finalized
+    // 返回队列中尚未完成的stETH的数量
     function unfinalizedStETH() external view returns (uint256) {
         return
             _getQueue()[getLastRequestId()].cumulativeStETH - _getQueue()[getLastFinalizedRequestId()].cumulativeStETH;
