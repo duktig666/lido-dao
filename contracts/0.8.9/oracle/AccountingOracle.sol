@@ -429,6 +429,7 @@ contract AccountingOracle is BaseOracle {
         _submitReportExtraDataList(items);
     }
 
+    // 判断合约是否已经提交
     struct ProcessingState {
         /// @notice Reference slot for the current reporting frame.
         uint256 currentFrameRefSlot;
